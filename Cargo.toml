@@ -8,9 +8,6 @@ description = "Compile a typed query AST (qexpr) into execution-friendly plans (
 publish = true
 
 [dependencies]
-qexpr = { workspace = true }
-thiserror = { workspace = true }
-
-[lints]
-workspace = true
+qexpr = "0.1.0"
+thiserror = "2.0"
 
