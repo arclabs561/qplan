@@ -5,7 +5,10 @@ edition = "2021"
 rust-version = "1.80"
 license = "MIT OR Apache-2.0"
 description = "Compile a typed query AST (qexpr) into execution-friendly plans (prime-ideal: planning)."
-publish = true
+repository = "https://github.com/arclabs561/qplan"
+homepage = "https://github.com/arclabs561/qplan"
+documentation = "https://docs.rs/qplan"
+publish = false
 
 [dependencies]
 qexpr = { git = "https://github.com/arclabs561/qexpr", branch = "main" }
