@@ -8,6 +8,6 @@ description = "Compile a typed query AST (qexpr) into execution-friendly plans (
 publish = true
 
 [dependencies]
-qexpr = "0.1.0"
+qexpr = { git = "https://github.com/arclabs561/qexpr", branch = "main" }
 thiserror = "2.0"
 
