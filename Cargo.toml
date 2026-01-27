@@ -1,0 +1,16 @@
+[package]
+name = "qplan"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT OR Apache-2.0"
+description = "Compile a typed query AST (qexpr) into execution-friendly plans (prime-ideal: planning)."
+publish = true
+
+[dependencies]
+qexpr = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
+
