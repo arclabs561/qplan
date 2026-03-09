@@ -8,9 +8,12 @@ description = "Compile a typed query AST (qexpr) into execution-friendly plans (
 repository = "https://github.com/arclabs561/qplan"
 homepage = "https://github.com/arclabs561/qplan"
 documentation = "https://docs.rs/qplan"
-publish = false
+publish = true
+readme = "README.md"
+keywords = ["information-retrieval", "query", "planning", "ast"]
+categories = ["text-processing", "algorithms"]
 
 [dependencies]
-qexpr = { git = "https://github.com/arclabs561/qexpr", branch = "main" }
+qexpr = "0.1.0"
 thiserror = "2.0"
 
