@@ -1,10 +1,10 @@
-//! `qplan`: query planning/compilation for retrieval.
+//! `qplan`: query planning / compilation for retrieval.
 //!
-//! Prime-ideal goal: isolate the “planner seam” between query meaning (`qexpr`)
-//! and execution backends (postings/positional/grams/etc.).
+//! `qexpr` describes query meaning; `qplan` compiles that meaning into a small plan that
+//! execution backends can implement efficiently.
 //!
-//! This crate is intentionally **honest**: it only supports a small subset of
-//! `QExpr` today (conjunctive queries), and returns explicit errors for the rest.
+//! This crate is intentionally narrow today: it only supports a conjunctive subset of `QExpr`
+//! (terms, phrases, NEAR constraints, and AND trees) and returns explicit errors for the rest.
 
 #![warn(missing_docs)]
 

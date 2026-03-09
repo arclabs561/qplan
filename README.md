@@ -10,7 +10,7 @@ return explicit errors so downstream systems can choose a fallback.
 
 ```toml
 [dependencies]
-qplan = "0.1.0"
+qplan = { git = "https://github.com/arclabs561/qplan" }
 ```
 
 Example:
