@@ -10,7 +10,7 @@ homepage = "https://github.com/arclabs561/qplan"
 documentation = "https://docs.rs/qplan"
 publish = true
 readme = "README.md"
-keywords = ["information-retrieval", "query", "planning", "ast"]
+keywords = ["ir", "query", "planning", "ast", "retrieval"]
 categories = ["text-processing", "algorithms"]
 
 [dependencies]
