@@ -13,6 +13,7 @@ use std::collections::HashSet;
 
 /// Errors returned by `qplan`.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Error {
     /// OR is not supported by the current compilation target.
     #[error("unsupported operator: Or")]
