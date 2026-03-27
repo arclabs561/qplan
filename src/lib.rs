@@ -165,6 +165,7 @@ pub fn compile_conjunctive(expr: &QExpr) -> Result<ConjunctivePlan, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use qexpr::{FieldName, QExpr, Term};
 
     #[test]
@@ -240,6 +241,121 @@ mod tests {
             vec!["deep".to_string(), "learning".to_string()]
         );
         assert!(p.nears[0].ordered);
+    }
+
+    // -- Generators --
+
+    fn arb_non_blank_term() -> impl Strategy<Value = Term> {
+        "[a-z]{1,8}".prop_map(Term::new)
+    }
+
+    /// An And-only tree (terms, phrases, nears, and nested Ands).
+    fn arb_and_only(depth: u32) -> impl Strategy<Value = QExpr> {
+        let leaf = prop_oneof![
+            arb_non_blank_term().prop_map(QExpr::Term),
+            prop::collection::vec(arb_non_blank_term(), 2..5)
+                .prop_map(|ts| QExpr::Phrase(Phrase::new(ts))),
+            (
+                prop::collection::vec(arb_non_blank_term(), 2..5),
+                1..10u32,
+                any::<bool>(),
+            )
+                .prop_map(|(ts, w, o)| QExpr::Near(Near::new(ts, w, o))),
+        ];
+        leaf.prop_recursive(depth, 32, 4, |inner| {
+            prop::collection::vec(inner, 1..4).prop_map(QExpr::And)
+        })
+    }
+
+    /// Collect all non-blank term strings from a QExpr tree.
+    fn collect_terms(expr: &QExpr) -> Vec<String> {
+        let mut out = Vec::new();
+        match expr {
+            QExpr::Term(t) => {
+                if !t.is_blank() {
+                    out.push(t.0.clone());
+                }
+            }
+            QExpr::Phrase(p) => {
+                for t in &p.terms {
+                    if !t.is_blank() {
+                        out.push(t.0.clone());
+                    }
+                }
+            }
+            QExpr::Near(n) => {
+                for t in &n.terms {
+                    if !t.is_blank() {
+                        out.push(t.0.clone());
+                    }
+                }
+            }
+            QExpr::And(xs) | QExpr::Or(xs) => {
+                for x in xs {
+                    out.extend(collect_terms(x));
+                }
+            }
+            QExpr::Not(x) => out.extend(collect_terms(x)),
+            QExpr::Field(_, x) => out.extend(collect_terms(x)),
+        }
+        out
+    }
+
+    // -- Property tests --
+
+    proptest! {
+        #[test]
+        fn and_only_tree_always_compiles(expr in arb_and_only(3)) {
+            prop_assert!(compile_conjunctive(&expr).is_ok());
+        }
+
+        #[test]
+        fn bag_terms_contains_all_unique_terms(expr in arb_and_only(3)) {
+            let plan = compile_conjunctive(&expr).unwrap();
+            let expected: std::collections::HashSet<String> = collect_terms(&expr).into_iter().collect();
+            let actual: std::collections::HashSet<String> = plan.bag_terms.iter().cloned().collect();
+            prop_assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn phrases_preserve_term_order(
+            terms in prop::collection::vec(arb_non_blank_term(), 2..6),
+        ) {
+            let expr = QExpr::Phrase(Phrase::new(terms.clone()));
+            let plan = compile_conjunctive(&expr).unwrap();
+            let expected: Vec<String> = terms.iter().map(|t| t.0.clone()).collect();
+            prop_assert_eq!(&plan.phrases[0], &expected);
+        }
+
+        #[test]
+        fn or_always_rejected(
+            children in prop::collection::vec(arb_non_blank_term().prop_map(QExpr::Term), 1..4),
+        ) {
+            let expr = QExpr::Or(children);
+            prop_assert_eq!(compile_conjunctive(&expr).unwrap_err(), Error::UnsupportedOr);
+        }
+
+        #[test]
+        fn not_always_rejected(inner in arb_non_blank_term().prop_map(QExpr::Term)) {
+            let expr = QExpr::Not(Box::new(inner));
+            prop_assert_eq!(compile_conjunctive(&expr).unwrap_err(), Error::UnsupportedNot);
+        }
+
+        #[test]
+        fn field_always_rejected(
+            name in "[a-z]{1,6}".prop_map(FieldName::new),
+            inner in arb_non_blank_term().prop_map(QExpr::Term),
+        ) {
+            let expr = QExpr::Field(name, Box::new(inner));
+            prop_assert_eq!(compile_conjunctive(&expr).unwrap_err(), Error::UnsupportedField);
+        }
+
+        #[test]
+        fn compilation_is_deterministic(expr in arb_and_only(3)) {
+            let a = compile_conjunctive(&expr).unwrap();
+            let b = compile_conjunctive(&expr).unwrap();
+            prop_assert_eq!(a, b);
+        }
     }
 
     #[test]
