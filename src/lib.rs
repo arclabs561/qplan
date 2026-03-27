@@ -23,6 +23,9 @@ pub enum Error {
     /// Field scoping is not supported without field-aware indexing.
     #[error("unsupported operator: Field")]
     UnsupportedField,
+    /// A phrase or near constraint reduced to fewer than 2 terms after blank filtering.
+    #[error("constraint reduced to fewer than 2 terms after blank filtering")]
+    DegenerateConstraint,
 }
 
 /// A compiled conjunctive query plan.
@@ -76,7 +79,11 @@ pub fn compile_conjunctive(expr: &QExpr) -> Result<ConjunctivePlan, Error> {
         }
     }
 
-    fn push_phrase(bag: &mut Vec<String>, phrases: &mut Vec<Vec<String>>, p: &Phrase) {
+    fn push_phrase(
+        bag: &mut Vec<String>,
+        phrases: &mut Vec<Vec<String>>,
+        p: &Phrase,
+    ) -> Result<(), Error> {
         let mut ts: Vec<String> = Vec::new();
         for t in &p.terms {
             if !t.is_blank() {
@@ -86,10 +93,13 @@ pub fn compile_conjunctive(expr: &QExpr) -> Result<ConjunctivePlan, Error> {
         }
         if ts.len() >= 2 {
             phrases.push(ts);
+        } else {
+            return Err(Error::DegenerateConstraint);
         }
+        Ok(())
     }
 
-    fn push_near(bag: &mut Vec<String>, nears: &mut Vec<NearPlan>, n: &Near) {
+    fn push_near(bag: &mut Vec<String>, nears: &mut Vec<NearPlan>, n: &Near) -> Result<(), Error> {
         let mut ts: Vec<String> = Vec::new();
         for t in &n.terms {
             if !t.is_blank() {
@@ -103,7 +113,10 @@ pub fn compile_conjunctive(expr: &QExpr) -> Result<ConjunctivePlan, Error> {
                 window: n.window,
                 ordered: n.ordered,
             });
+        } else {
+            return Err(Error::DegenerateConstraint);
         }
+        Ok(())
     }
 
     fn walk(
@@ -117,14 +130,8 @@ pub fn compile_conjunctive(expr: &QExpr) -> Result<ConjunctivePlan, Error> {
                 push_term(bag, t);
                 Ok(())
             }
-            QExpr::Phrase(p) => {
-                push_phrase(bag, phrases, p);
-                Ok(())
-            }
-            QExpr::Near(n) => {
-                push_near(bag, nears, n);
-                Ok(())
-            }
+            QExpr::Phrase(p) => push_phrase(bag, phrases, p),
+            QExpr::Near(n) => push_near(bag, nears, n),
             QExpr::And(xs) => {
                 for x in xs {
                     walk(x, bag, phrases, nears)?;
@@ -171,6 +178,68 @@ mod tests {
         assert!(p.bag_terms.contains(&"alpha".to_string()));
         assert!(p.bag_terms.contains(&"new".to_string()));
         assert!(p.bag_terms.contains(&"york".to_string()));
+    }
+
+    #[test]
+    fn phrase_with_blanks_keeping_two_terms() {
+        // 1 blank + 2 non-blank -> blank filtered, phrase kept with 2 terms.
+        let q = QExpr::Phrase(Phrase::new(vec![
+            Term::new("  "),
+            Term::new("new"),
+            Term::new("york"),
+        ]));
+        let p = compile_conjunctive(&q).unwrap();
+        assert_eq!(p.phrases, vec![vec!["new".to_string(), "york".to_string()]]);
+        assert!(p.bag_terms.contains(&"new".to_string()));
+        assert!(p.bag_terms.contains(&"york".to_string()));
+    }
+
+    #[test]
+    fn phrase_reduced_to_one_term_errors() {
+        // 1 blank + 1 non-blank -> only 1 term after filtering -> DegenerateConstraint.
+        let q = QExpr::Phrase(Phrase::new(vec![Term::new("  "), Term::new("solo")]));
+        assert_eq!(
+            compile_conjunctive(&q).unwrap_err(),
+            Error::DegenerateConstraint
+        );
+    }
+
+    #[test]
+    fn phrase_all_blank_errors() {
+        let q = QExpr::Phrase(Phrase::new(vec![Term::new("  "), Term::new("")]));
+        assert_eq!(
+            compile_conjunctive(&q).unwrap_err(),
+            Error::DegenerateConstraint
+        );
+    }
+
+    #[test]
+    fn near_reduced_to_one_term_errors() {
+        let q = QExpr::Near(Near::new(
+            vec![Term::new("  "), Term::new("only")],
+            5,
+            false,
+        ));
+        assert_eq!(
+            compile_conjunctive(&q).unwrap_err(),
+            Error::DegenerateConstraint
+        );
+    }
+
+    #[test]
+    fn near_with_blanks_keeping_two_terms() {
+        let q = QExpr::Near(Near::new(
+            vec![Term::new("  "), Term::new("deep"), Term::new("learning")],
+            5,
+            true,
+        ));
+        let p = compile_conjunctive(&q).unwrap();
+        assert_eq!(p.nears.len(), 1);
+        assert_eq!(
+            p.nears[0].terms,
+            vec!["deep".to_string(), "learning".to_string()]
+        );
+        assert!(p.nears[0].ordered);
     }
 
     #[test]
